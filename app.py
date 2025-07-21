@@ -6,7 +6,6 @@ from pathlib import Path
 from enum import Enum
 from typing import Optional, Callable
 
-# ایمپورت کتابخانه جدید و تنظیم تم
 import customtkinter
 
 try:
@@ -18,16 +17,16 @@ try:
 except ImportError:
     WINDOWS_API_AVAILABLE = False
 
+# --- App Appearance Setup ---
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme("green")
 
 class Config:
-    """پیکربندی مرکزی برنامه."""
+    """Central configuration for the application."""
     class App:
-        NAME, VERSION = "NIT Group Personal Assistant", "Final v3.2" # نسخه آپدیت شد
+        NAME, VERSION = "NIT Personal Assistant", "vFinal v3.5"
         GEOMETRY_COLLAPSED, GEOMETRY_EXPANDED = "380x300", "380x500"
-        FOLDER_NAME, SETTINGS_FILE = "PersonalAssistant", "config.json"
-        # <--- رنگ سرمه‌ای پس‌زمینه برای استفاده در هدر
+        FOLDER_NAME, SETTINGS_FILE = "NitPersonalAssistant", "config.json"
         BACKGROUND_COLOR = "#0F172A"
 
     class UI:
@@ -37,50 +36,16 @@ class Config:
             ACCENT_PURPLE = "#9b59b6"
             WARNING = "#f39c12"
             INFO = "#3498db"
+            PRIMARY_DISABLED = "#2a6a43"
 
 class LogLevel(Enum):
-    SUCCESS = (Config.UI.Theme.PRIMARY, "✅"); WARNING = (Config.UI.Theme.WARNING, "⚠️"); ERROR   = (Config.UI.Theme.ACCENT_RED, "❌"); INFO    = (Config.UI.Theme.INFO, "ℹ️"); STARTUP = (Config.UI.Theme.ACCENT_PURPLE, "🚀"); ACTIVE  = ("#e67e22", "🎯"); SAVE    = ("#2ecc71", "💾")
-
-class CustomSpinbox(customtkinter.CTkFrame):
-    def __init__(self, parent, from_=1, to=60, textvariable=None, command=None):
-        super().__init__(parent, fg_color="transparent")
-        
-        self.textvariable = textvariable
-        self.from_ = from_
-        self.to = to
-        self.command = command
-
-        self.grid_columnconfigure(0, weight=1)
-
-        self.entry = customtkinter.CTkEntry(self, textvariable=self.textvariable, width=50, justify='center')
-        self.entry.grid(row=0, column=0, rowspan=2, padx=(0, 5), sticky="ew")
-
-        # <--- تغییر ۱: کوچک‌تر کردن دکمه‌ها و فونت آنها
-        button_font = customtkinter.CTkFont(size=10)
-        up_button = customtkinter.CTkButton(self, text="▲", width=18, height=12, font=button_font, command=self._increment)
-        up_button.grid(row=0, column=1)
-        
-        down_button = customtkinter.CTkButton(self, text="▼", width=18, height=12, font=button_font, command=self._decrement)
-        down_button.grid(row=1, column=1)
-
-    def _increment(self):
-        try:
-            current_value = int(self.textvariable.get())
-            self.textvariable.set(min(current_value + 1, self.to))
-            if self.command: self.command()
-        except ValueError:
-            self.textvariable.set(self.from_)
-
-    def _decrement(self):
-        try:
-            current_value = int(self.textvariable.get())
-            self.textvariable.set(max(current_value - 1, self.from_))
-            if self.command: self.command()
-        except ValueError:
-            self.textvariable.set(self.from_)
-            
-    def configure(self, state=None):
-        self.entry.configure(state=state)
+    SUCCESS = (Config.UI.Theme.PRIMARY, "✅")
+    WARNING = (Config.UI.Theme.WARNING, "⚠️")
+    ERROR = (Config.UI.Theme.ACCENT_RED, "❌")
+    INFO = (Config.UI.Theme.INFO, "ℹ️")
+    STARTUP = (Config.UI.Theme.ACCENT_PURPLE, "🚀")
+    ACTIVE = ("#e67e22", "🎯")
+    SAVE = ("#2ecc71", "💾")
 
 class AppUI(customtkinter.CTk):
     instance = None
@@ -88,13 +53,12 @@ class AppUI(customtkinter.CTk):
         super().__init__(**kwargs)
         AppUI.instance = self
         
-        # <--- رنگ پس‌زمینه از کانفیگ خوانده می‌شود
         self.configure(fg_color=Config.App.BACKGROUND_COLOR)
 
         self.script = AutoSaveScript(self.add_log, self.update_status)
         self.tray_manager = TrayManager(self._schedule_show_from_tray, self._schedule_quit_application)
         self.window_hidden = False
-        self.log_expanded = True
+        self.log_expanded = False
 
         self._configure_root_style()
         self._create_widgets()
@@ -105,7 +69,7 @@ class AppUI(customtkinter.CTk):
     
     def _configure_root_style(self):
         self.title(Config.App.NAME)
-        self.geometry(Config.App.GEOMETRY_EXPANDED)
+        self.geometry(Config.App.GEOMETRY_COLLAPSED)
         self.resizable(False, False)
 
     def _create_widgets(self):
@@ -114,21 +78,23 @@ class AppUI(customtkinter.CTk):
 
         self._create_header(self.container)
         self._create_control_panel(self.container)
+        self._create_action_buttons(self.container)
         self._create_log_section(self.container)
         self._create_footer(self.container)
     
     def _create_header(self, parent):
-        header = customtkinter.CTkFrame(parent, height=55, corner_radius=10, fg_color=Config.UI.Theme.PRIMARY)
+        header = customtkinter.CTkFrame(parent, corner_radius=10, fg_color=Config.UI.Theme.PRIMARY)
         header.pack(fill="x", pady=(0, 20))
-        header.pack_propagate(False)
         
-        # <--- تغییر ۲: استایل جدید فونت‌ها و رنگ هدر
-        title_font = customtkinter.CTkFont(family="Fixedsys", size=14, weight="bold")
-        version_font = customtkinter.CTkFont(family="Fixedsys", size=8)
-        header_text_color = Config.App.BACKGROUND_COLOR # رنگ سرمه‌ای
+        text_container = customtkinter.CTkFrame(header, fg_color="transparent")
+        text_container.pack(expand=True, pady=8)
 
-        customtkinter.CTkLabel(header, text=Config.App.NAME, font=title_font, text_color=header_text_color).pack(pady=(7,0))
-        customtkinter.CTkLabel(header, text=f"v{Config.App.VERSION}", font=version_font, text_color=header_text_color).pack()
+        title_font = customtkinter.CTkFont(family="Fixedsys", size=14, weight="bold")
+        version_font = customtkinter.CTkFont(family="Fixedsys", size=8, weight="bold")
+        header_text_color = Config.App.BACKGROUND_COLOR
+
+        customtkinter.CTkLabel(text_container, text=Config.App.NAME, font=title_font, text_color=header_text_color).pack()
+        customtkinter.CTkLabel(text_container, text=f"{Config.App.VERSION}", font=version_font, text_color=header_text_color).pack(pady=0)
 
     def _create_control_panel(self, parent):
         card = customtkinter.CTkFrame(parent)
@@ -145,8 +111,18 @@ class AppUI(customtkinter.CTk):
         customtkinter.CTkLabel(status_fr, text="Status:", font=customtkinter.CTkFont(size=11, weight="bold")).pack(side="left")
         self.status_label = customtkinter.CTkLabel(status_fr, text="Initializing...")
         self.status_label.pack(side="left", padx=5)
+
+    def _create_action_buttons(self, parent):
+        action_frame = customtkinter.CTkFrame(parent, fg_color="transparent")
+        action_frame.pack(fill="x", pady=(0, 15))
         
-        customtkinter.CTkButton(status_fr, text="⚙️ Settings", width=100, command=self._open_settings_dialog).pack(side="right")
+        action_frame.grid_columnconfigure((0, 1), weight=1)
+
+        customtkinter.CTkButton(action_frame, text="Exit", fg_color=Config.UI.Theme.ACCENT_RED, 
+                              hover_color="#c0392b", command=self.quit_application, 
+                              height=40).grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        customtkinter.CTkButton(action_frame, text="⚙️ Tools", command=self._open_settings_dialog, 
+                              height=40).grid(row=0, column=1, sticky="ew", padx=(5, 0))
 
     def _create_log_section(self, parent):
         self.log_fr = customtkinter.CTkFrame(parent)
@@ -155,115 +131,186 @@ class AppUI(customtkinter.CTk):
         log_header_fr = customtkinter.CTkFrame(self.log_fr, fg_color="transparent")
         log_header_fr.pack(fill="x", padx=15, pady=(10,5))
         
-        self.log_toggle_button = customtkinter.CTkButton(log_header_fr, text="▼", width=20, command=self._toggle_log)
-        self.log_toggle_button.pack(side="left", anchor='n')
-        customtkinter.CTkLabel(log_header_fr, text="📋 Activity Log", font=customtkinter.CTkFont(size=12, weight="bold")).pack(side="left", padx=10)
+        self.log_toggle_button = customtkinter.CTkButton(log_header_fr, text="▶", width=50, height=50, 
+                                                        command=self._toggle_log, font=customtkinter.CTkFont(size=20))
+        self.log_toggle_button.pack(side="left", anchor='n', padx=(20, 0))
+        
+        customtkinter.CTkLabel(log_header_fr, text="📋 Activity Log", font=customtkinter.CTkFont(size=12, weight="bold")).pack(side="left", padx=15)
         
         self.log_text_container = customtkinter.CTkFrame(self.log_fr, fg_color="transparent")
-        self.log_text_container.pack(fill="both", expand=True, padx=15, pady=(0, 15))
-
+        
         self.log_text = customtkinter.CTkTextbox(self.log_text_container, wrap="none", state="disabled", border_width=0)
         self.log_text.pack(fill="both", expand=True)
 
     def _create_footer(self, parent):
         self.footer = customtkinter.CTkFrame(parent, fg_color="transparent")
         self.footer.pack(fill="x", side="bottom", pady=(10, 0))
+
+        center_container = customtkinter.CTkFrame(self.footer, fg_color="transparent")
+        center_container.pack(expand=True)
+
+        footer_font = customtkinter.CTkFont(size=9, weight="bold")
+        small_font = customtkinter.CTkFont(size=8)
         
-        footer_text = "Developed With ❤️ By Erf For NIT Group"
-        footer_label = customtkinter.CTkLabel(self.footer, text=footer_text, font=customtkinter.CTkFont(size=9), text_color="gray50")
-        footer_label.pack()
+        line1_frame = customtkinter.CTkFrame(center_container, fg_color="transparent")
+        line1_frame.pack()
+        customtkinter.CTkLabel(line1_frame, text="Developed With ", font=footer_font, text_color="gray50").pack(side="left")
+        customtkinter.CTkLabel(line1_frame, text="Erfan Fazeli", font=footer_font, text_color=Config.UI.Theme.PRIMARY).pack(side="left")
+
+        customtkinter.CTkLabel(center_container, text="For", font=small_font, text_color="gray50").pack()
+
+        customtkinter.CTkLabel(center_container, text="NIT Group", font=footer_font, text_color=Config.UI.Theme.ACCENT_RED).pack()
 
     def _open_settings_dialog(self):
         dialog = customtkinter.CTkToplevel(self)
-        dialog.title("Settings")
-        dialog.geometry("420x480")
+        dialog.title("Tools")
+        dialog.geometry("410x480")
         dialog.resizable(False, False)
         dialog.transient(self)
         dialog.grab_set()
 
+        dialog.configure(fg_color=Config.App.BACKGROUND_COLOR)
+
         save_enabled_var = tk.BooleanVar(value=self.script.settings['auto_save_enabled'])
-        save_interval_var = tk.StringVar(value=str(self.script.settings['auto_save_interval']))
         backup_enabled_var = tk.BooleanVar(value=self.script.settings.get('smart_backup_enabled', False))
-        backup_interval_var = tk.StringVar(value=str(self.script.settings.get('smart_backup_interval', 60)))
         startup_var = tk.BooleanVar(value=self.script.settings.get('start_with_windows', False))
 
         main_frame = customtkinter.CTkFrame(dialog, fg_color="transparent")
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
+        # --- Section 1: Automation Card ---
         automation_card = customtkinter.CTkFrame(main_frame)
         automation_card.pack(fill="x", pady=(0, 15), ipady=10)
-        customtkinter.CTkLabel(automation_card, text="⚡️ Automation", font=customtkinter.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=15)
+        customtkinter.CTkLabel(automation_card, text="⚡️ Automation", font=customtkinter.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=15, pady=(5, 0))
         
+        # START: REFACTORED CODE WITH GRID
         automation_content = customtkinter.CTkFrame(automation_card, fg_color="transparent")
-        automation_content.pack(fill="x", padx=15, pady=5)
-        automation_content.grid_columnconfigure((0, 1), weight=1)
-
-        save_col = customtkinter.CTkFrame(automation_content, fg_color="transparent")
-        save_col.grid(row=0, column=0, padx=(0, 10), sticky="ew")
-        customtkinter.CTkLabel(save_col, text="Auto-Save").pack(side="left")
-        save_switch = customtkinter.CTkSwitch(save_col, text="", variable=save_enabled_var)
-        save_switch.pack(side="right")
+        automation_content.pack(fill="x", padx=15, pady=10)
         
-        save_interval_frame = customtkinter.CTkFrame(automation_content, fg_color="transparent")
-        save_interval_frame.grid(row=1, column=0, padx=(0, 10), pady=(5,0), sticky="ew")
-        customtkinter.CTkLabel(save_interval_frame, text="Interval (sec):").pack(side="left")
-        save_spinbox = CustomSpinbox(save_interval_frame, from_=1, to=60, textvariable=save_interval_var)
-        save_spinbox.pack(side="right")
+        # Configure a 4-column grid for perfect alignment
+        # Col 0: Label, Col 1: Switch, Col 2: Spacer, Col 3: Number Controls
+        automation_content.grid_columnconfigure(0, weight=0)
+        automation_content.grid_columnconfigure(1, weight=0)
+        automation_content.grid_columnconfigure(2, weight=1) # The spacer column
+        automation_content.grid_columnconfigure(3, weight=0)
+        
+        # --- Auto-Save Row (row 0) ---
+        customtkinter.CTkLabel(automation_content, text="Auto-Save").grid(row=0, column=0, sticky="w", pady=5)
+        save_switch = customtkinter.CTkSwitch(automation_content, text="", variable=save_enabled_var, switch_width=50, switch_height=25)
+        save_switch.grid(row=0, column=1, sticky="w", pady=5, padx=10)
 
-        backup_col = customtkinter.CTkFrame(automation_content, fg_color="transparent")
-        backup_col.grid(row=0, column=1, padx=(10, 0), sticky="ew")
-        customtkinter.CTkLabel(backup_col, text="Smart Backup").pack(side="left")
-        backup_switch = customtkinter.CTkSwitch(backup_col, text="", variable=backup_enabled_var)
-        backup_switch.pack(side="right")
+        save_controls_fr = customtkinter.CTkFrame(automation_content, fg_color="transparent")
+        save_controls_fr.grid(row=0, column=3, sticky="e", pady=5)
+        
+        customtkinter.CTkButton(save_controls_fr, text="-", width=25, height=25, command=lambda: update_save_value(-1)).pack(side="left", padx=(0, 2))
+        save_entry = customtkinter.CTkEntry(save_controls_fr, width=50, justify="center")
+        save_entry.insert(0, str(self.script.settings['auto_save_interval']))
+        save_entry.pack(side="left", padx=2)
+        customtkinter.CTkButton(save_controls_fr, text="+", width=25, height=25, command=lambda: update_save_value(1)).pack(side="left", padx=(2, 0))
 
-        backup_interval_frame = customtkinter.CTkFrame(automation_content, fg_color="transparent")
-        backup_interval_frame.grid(row=1, column=1, padx=(10, 0), pady=(5,0), sticky="ew")
-        customtkinter.CTkLabel(backup_interval_frame, text="Interval (min):").pack(side="left")
-        backup_spinbox = CustomSpinbox(backup_interval_frame, from_=1, to=1440, textvariable=backup_interval_var)
-        backup_spinbox.pack(side="right")
+        def update_save_value(delta):
+            try:
+                value = int(save_entry.get()) + delta
+                if 1 <= value <= 60:
+                    save_entry.delete(0, tk.END)
+                    save_entry.insert(0, str(value))
+            except ValueError: pass
 
+        # --- Smart Backup Row (row 1) ---
+        customtkinter.CTkLabel(automation_content, text="Smart Backup").grid(row=1, column=0, sticky="w", pady=5)
+        backup_switch = customtkinter.CTkSwitch(automation_content, text="", variable=backup_enabled_var, switch_width=50, switch_height=25)
+        backup_switch.grid(row=1, column=1, sticky="w", pady=5, padx=10)
+        
+        backup_controls_fr = customtkinter.CTkFrame(automation_content, fg_color="transparent")
+        backup_controls_fr.grid(row=1, column=3, sticky="e", pady=5)
+        
+        customtkinter.CTkButton(backup_controls_fr, text="-", width=25, height=25, command=lambda: update_backup_value(-1)).pack(side="left", padx=(0, 2))
+        backup_entry = customtkinter.CTkEntry(backup_controls_fr, width=50, justify="center")
+        backup_entry.insert(0, str(self.script.settings.get('smart_backup_interval', 60)))
+        backup_entry.pack(side="left", padx=2)
+        customtkinter.CTkButton(backup_controls_fr, text="+", width=25, height=25, command=lambda: update_backup_value(1)).pack(side="left", padx=(2, 0))
+
+        def update_backup_value(delta):
+            try:
+                value = int(backup_entry.get()) + delta
+                if 1 <= value <= 120:
+                    backup_entry.delete(0, tk.END)
+                    backup_entry.insert(0, str(value))
+            except ValueError: pass
+        
+        # --- Section 2: General Settings Card ---
         general_card = customtkinter.CTkFrame(main_frame)
         general_card.pack(fill="x", pady=(0, 15), ipady=10)
-        customtkinter.CTkLabel(general_card, text="⚙️ General", font=customtkinter.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=15)
+        customtkinter.CTkLabel(general_card, text="⚙️ General", font=customtkinter.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=15, pady=(5, 0))
         
         startup_frame = customtkinter.CTkFrame(general_card, fg_color="transparent")
         startup_frame.pack(fill="x", padx=15, pady=10)
-        customtkinter.CTkLabel(startup_frame, text="Start with Windows").pack(side="left")
-        startup_switch = customtkinter.CTkSwitch(startup_frame, text="", variable=startup_var)
-        startup_switch.pack(side="right")
 
-        customtkinter.CTkButton(main_frame, text="📂 Add Application...", command=self._on_add_app_browse).pack(fill="x", ipady=4, pady=5)
+        # Configure a 2-column grid as per the user's example
+        startup_frame.grid_columnconfigure(0, weight=1)
+        startup_frame.grid_columnconfigure(1, weight=0)
 
-        def toggle_spinners_state():
-            save_spinbox.configure(state='normal' if save_enabled_var.get() else 'disabled')
-            backup_spinbox.configure(state='normal' if backup_enabled_var.get() else 'disabled')
+        customtkinter.CTkLabel(startup_frame, text="Run on Windows Startup").grid(row=0, column=0, sticky="w")
+        startup_switch = customtkinter.CTkSwitch(startup_frame, text="", variable=startup_var, switch_width=50, switch_height=25)
+        startup_switch.grid(row=0, column=1, sticky="e")
+        # END: REFACTORED CODE
 
-        save_switch.configure(command=toggle_spinners_state)
-        backup_switch.configure(command=toggle_spinners_state)
-        toggle_spinners_state()
+        # --- Section 3: Actions Card ---
+        actions_card = customtkinter.CTkFrame(main_frame)
+        actions_card.pack(fill="x", pady=0)
+        
+        actions_content = customtkinter.CTkFrame(actions_card, fg_color="transparent")
+        actions_content.pack(fill="x", expand=True, padx=15, pady=15)
+        
+        customtkinter.CTkButton(actions_content, text="📂 Add Application...", command=self._on_add_app_browse).pack(fill="x", ipady=4, pady=(0, 15))
+
+        btn_container = customtkinter.CTkFrame(actions_content, fg_color="transparent")
+        btn_container.pack(side="bottom")
+        
+        customtkinter.CTkButton(btn_container, text="Close", command=dialog.destroy, fg_color=Config.UI.Theme.ACCENT_RED, hover_color="#c0392b").pack(side="left", padx=5)
+        customtkinter.CTkButton(btn_container, text="Save Settings", command=lambda: save_and_close()).pack(side="left", padx=5)
+
+        def toggle_controls_state():
+            save_state = 'normal' if save_enabled_var.get() else 'disabled'
+            backup_state = 'normal' if backup_enabled_var.get() else 'disabled'
+            save_entry.configure(state=save_state)
+            for btn in save_controls_fr.winfo_children():
+                if isinstance(btn, customtkinter.CTkButton): btn.configure(state=save_state)
+            backup_entry.configure(state=backup_state)
+            for btn in backup_controls_fr.winfo_children():
+                if isinstance(btn, customtkinter.CTkButton): btn.configure(state=backup_state)
+
+        save_switch.configure(command=toggle_controls_state)
+        backup_switch.configure(command=toggle_controls_state)
+        toggle_controls_state()
 
         def save_and_close():
             try:
-                self.script.update_settings({ 'auto_save_enabled': save_enabled_var.get(), 'auto_save_interval': int(save_interval_var.get()), 'smart_backup_enabled': backup_enabled_var.get(), 'smart_backup_interval': int(backup_interval_var.get()), 'start_with_windows': startup_var.get() })
+                auto_save_interval = int(save_entry.get())
+                smart_backup_interval = int(backup_entry.get())
+                if not (1 <= auto_save_interval <= 60 and 1 <= smart_backup_interval <= 120):
+                    messagebox.showerror("Error", "Please enter valid intervals (1-60 sec for Auto-Save, 1-120 min for Smart Backup).")
+                    return
+                self.script.update_settings({
+                    'auto_save_enabled': save_enabled_var.get(), 'auto_save_interval': auto_save_interval,
+                    'smart_backup_enabled': backup_enabled_var.get(), 'smart_backup_interval': smart_backup_interval,
+                    'start_with_windows': startup_var.get()
+                })
                 dialog.destroy()
             except ValueError:
-                messagebox.showerror("Invalid Input", "Intervals must be valid numbers.", parent=dialog)
-        
-        btn_container = customtkinter.CTkFrame(main_frame, fg_color="transparent")
-        btn_container.pack(side="bottom", pady=(10, 0))
-        customtkinter.CTkButton(btn_container, text="Save Settings", command=save_and_close).pack(side="left", padx=5)
-        customtkinter.CTkButton(btn_container, text="Close", command=dialog.destroy, fg_color=Config.UI.Theme.ACCENT_RED, hover_color="#c0392b").pack(side="left", padx=5)
+                messagebox.showerror("Error", "Please enter valid numbers.")
+
 
     def _toggle_log(self):
         if self.log_expanded:
             self.log_text_container.pack_forget()
-            self.geometry(Config.App.GEOMETRY_COLLAPSED)
+            self.after(50, lambda: self.geometry(Config.App.GEOMETRY_COLLAPSED))
             self.log_toggle_button.configure(text="▶")
         else:
             self.footer.pack_forget()
             self.log_text_container.pack(fill="both", expand=True, padx=15, pady=(0, 15))
             self.footer.pack(fill="x", side="bottom", pady=(10, 0))
-            self.geometry(Config.App.GEOMETRY_EXPANDED)
+            self.after(50, lambda: self.geometry(Config.App.GEOMETRY_EXPANDED))
             self.log_toggle_button.configure(text="▼")
         self.log_expanded = not self.log_expanded
 
@@ -298,7 +345,6 @@ class AppUI(customtkinter.CTk):
             self.withdraw()
             self.tray_manager.run_in_thread()
             self.window_hidden = True
-            if not silent: self.add_log("Minimized to system tray.", LogLevel.INFO)
 
     def show_from_tray(self):
         if self.window_hidden:
@@ -313,154 +359,245 @@ class AppUI(customtkinter.CTk):
         self.tray_manager.stop()
         self.destroy()
 
-# ==============================================================================
-# کلاس‌های بدون تغییر
-# ==============================================================================
 class SettingsManager:
     def __init__(self):
-        appdata_dir = Path(os.getenv('APPDATA', '.')) / Config.App.FOLDER_NAME; appdata_dir.mkdir(parents=True, exist_ok=True)
+        appdata_dir = Path(os.getenv('APPDATA', '.')) / Config.App.FOLDER_NAME
+        appdata_dir.mkdir(parents=True, exist_ok=True)
         self._path = appdata_dir / Config.App.SETTINGS_FILE
-        self.settings = { 'monitored_apps': ['photoshop.exe', 'afterfx.exe', 'premiere.exe', 'illustrator.exe', 'indesign.exe', 'acrobat.exe', 'animate.exe', 'lightroom.exe', 'audition.exe', 'figma.exe', 'resolve.exe', 'capcut.exe'], 'auto_save_enabled': True, 'auto_save_interval': 3, 'smart_backup_enabled': False, 'smart_backup_interval': 60, 'start_with_windows': False }
+        self.settings = {
+            'monitored_apps': [
+                'photoshop.exe', 'afterfx.exe', 'premiere.exe', 'illustrator.exe', 
+                'indesign.exe', 'acrobat.exe', 'animate.exe', 'lightroom.exe', 
+                'audition.exe', 'figma.exe', 'resolve.exe', 'capcut.exe'
+            ],
+            'auto_save_enabled': True,
+            'auto_save_interval': 3,
+            'smart_backup_enabled': False,
+            'smart_backup_interval': 60,
+            'start_with_windows': False
+        }
     def load(self):
         if self._path.exists():
             try:
-                with open(self._path, 'r') as f: loaded_settings = json.load(f)
-                for key, value in self.settings.items(): loaded_settings.setdefault(key, value)
+                with open(self._path, 'r') as f: 
+                    loaded_settings = json.load(f)
+                for key, value in self.settings.items():
+                    loaded_settings.setdefault(key, value)
                 self.settings = loaded_settings
-            except (json.JSONDecodeError, IOError): self.save()
-        else: self.save()
+            except (json.JSONDecodeError, IOError): 
+                self.save()
+        else:
+            self.save()
         return self.settings
     def save(self):
         try:
-            with open(self._path, 'w') as f: json.dump(self.settings, f, indent=4)
+            with open(self._path, 'w') as f: 
+                json.dump(self.settings, f, indent=4)
             return True
-        except IOError: return False
+        except IOError: 
+            return False
 
 class WindowsStartupManager:
     def __init__(self):
-        self.startup_folder = Path(os.getenv('APPDATA')) / 'Microsoft/Windows/Start Menu/Programs/Startup'; self.shortcut_path = self.startup_folder / f"{Config.App.NAME}.lnk"
+        self.startup_folder = Path(os.getenv('APPDATA')) / 'Microsoft/Windows/Start Menu/Programs/Startup'
+        self.shortcut_path = self.startup_folder / f"{Config.App.NAME}.lnk"
     def set_startup(self, enable: bool):
-        if not WINDOWS_API_AVAILABLE: return
+        if not WINDOWS_API_AVAILABLE: 
+            return
         try:
-            if enable: self._create_shortcut()
-            elif self.shortcut_path.exists(): self.shortcut_path.unlink()
-        except Exception as e: print(f"Error managing startup shortcut: {e}")
+            if enable: 
+                self._create_shortcut()
+            elif self.shortcut_path.exists(): 
+                self.shortcut_path.unlink()
+        except Exception as e: 
+            print(f"Error managing startup shortcut: {e}")
     def _create_shortcut(self):
         import sys
         try:
             from win32com.client import Dispatch
-            shell = Dispatch('WScript.Shell'); shortcut = shell.CreateShortCut(str(self.shortcut_path))
+            shell = Dispatch('WScript.Shell')
+            shortcut = shell.CreateShortCut(str(self.shortcut_path))
             target = sys.executable
-            if target.endswith("python.exe"): target = target.replace("python.exe", "pythonw.exe")
-            shortcut.Targetpath = target; shortcut.Arguments = f'"{os.path.abspath(__file__)}"'
-            shortcut.WorkingDirectory = os.path.dirname(os.path.abspath(__file__)); shortcut.save()
-        except ImportError: print("pywin32 is required to manage startup entries.")
-        except Exception as e: print(f"Failed to create shortcut: {e}")
+            if target.endswith("python.exe"): 
+                target = target.replace("python.exe", "pythonw.exe")
+            shortcut.Targetpath = target
+            shortcut.Arguments = f'"{os.path.abspath(__file__)}"'
+            shortcut.WorkingDirectory = os.path.dirname(os.path.abspath(__file__))
+            shortcut.save()
+        except ImportError: 
+            print("pywin32 is required to manage startup entries.")
+        except Exception as e: 
+            print(f"Failed to create shortcut: {e}")
 
 class ProcessMonitor:
-    def __init__(self, log_cb: Callable): self._log, self.hook, self.hook_proc = log_cb, None, None
+    def __init__(self, log_cb: Callable): 
+        self._log, self.hook, self.hook_proc = log_cb, None, None
     def get_active_window_info(self) -> Optional[tuple[str, str]]:
-        if not WINDOWS_API_AVAILABLE: return None
+        if not WINDOWS_API_AVAILABLE: 
+            return None
         try:
             hwnd = GetForegroundWindow()
-            if not hwnd: return None
-            _, pid = GetWindowThreadProcessId(hwnd); process_name = psutil.Process(pid).name().lower(); window_title = GetWindowText(hwnd)
+            if not hwnd: 
+                return None
+            _, pid = GetWindowThreadProcessId(hwnd)
+            process_name = psutil.Process(pid).name().lower()
+            window_title = GetWindowText(hwnd)
             return (process_name, window_title)
-        except (psutil.Error, AttributeError): return None
+        except (psutil.Error, AttributeError): 
+            return None
     def start_monitoring(self, check_cb: Callable):
-        if not WINDOWS_API_AVAILABLE: self._log("Windows API not found. Using fallback polling.", LogLevel.WARNING); return self._start_fallback_monitoring(check_cb)
+        if not WINDOWS_API_AVAILABLE: 
+            self._log("Windows API not found. Using fallback polling.", LogLevel.WARNING)
+            return self._start_fallback_monitoring(check_cb)
         try:
             def handler(nCode, wParam, lParam):
-                if nCode >= 0 and wParam == win32con.HCBT_ACTIVATE: AppUI.instance.after(100, check_cb)
+                if nCode >= 0 and wParam == win32con.HCBT_ACTIVATE: 
+                    AppUI.instance.after(100, check_cb)
                 return ctypes.windll.user32.CallNextHookEx(self.hook, nCode, wParam, lParam)
-            HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM); self.hook_proc = HOOKPROC(handler)
+            HOOKPROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM)
+            self.hook_proc = HOOKPROC(handler)
             self.hook = ctypes.windll.user32.SetWindowsHookExW(win32con.WH_CBT, self.hook_proc, ctypes.windll.kernel32.GetModuleHandleW(None), 0)
-            if not self.hook: raise RuntimeError("Hook failed.")
+            if not self.hook: 
+                raise RuntimeError("Hook failed.")
             self._log("Real-time monitoring enabled.", LogLevel.SUCCESS)
-        except Exception: self._start_fallback_monitoring(check_cb)
+        except Exception: 
+            self._start_fallback_monitoring(check_cb)
     def _start_fallback_monitoring(self, check_cb: Callable):
         def loop():
             last_info = None
             while True:
                 info = self.get_active_window_info()
-                if info and info[0] != (last_info and last_info[0]): last_info = info; AppUI.instance.after(0, check_cb)
+                if info and info[0] != (last_info and last_info[0]): 
+                    last_info = info
+                    AppUI.instance.after(0, check_cb)
                 time.sleep(2)
         threading.Thread(target=loop, daemon=True).start()
     def cleanup(self):
-        if self.hook and WINDOWS_API_AVAILABLE: ctypes.windll.user32.UnhookWindowsHookEx(self.hook)
+        if self.hook and WINDOWS_API_AVAILABLE: 
+            ctypes.windll.user32.UnhookWindowsHookEx(self.hook)
 
 class AutoSaveScript:
     def __init__(self, log_cb: Callable, status_cb: Callable):
-        self._log, self._update_status = log_cb, status_cb; self.settings_manager = SettingsManager(); self.process_monitor = ProcessMonitor(self._log)
-        self.startup_manager = WindowsStartupManager(); self.settings = self.settings_manager.load()
-        self.current_app: Optional[str] = None; self._save_timer: Optional[threading.Timer] = None; self._backup_timer: Optional[threading.Timer] = None
-    def start(self): self._log("Personal Assistant started.", LogLevel.STARTUP); self.process_monitor.start_monitoring(self._check_active_window)
-    def _is_target(self, name: str) -> bool: return name in self.settings.get('monitored_apps', [])
+        self._log, self._update_status = log_cb, status_cb
+        self.settings_manager = SettingsManager()
+        self.process_monitor = ProcessMonitor(self._log)
+        self.startup_manager = WindowsStartupManager()
+        self.settings = self.settings_manager.load()
+        self.current_app: Optional[str] = None
+        self._save_timer: Optional[threading.Timer] = None
+        self._backup_timer: Optional[threading.Timer] = None
+    def start(self): 
+        self._log("Personal Assistant started.", LogLevel.STARTUP)
+        self.process_monitor.start_monitoring(self._check_active_window)
+    def _is_target(self, name: str) -> bool: 
+        return name in self.settings.get('monitored_apps', [])
     def _check_active_window(self):
         info = self.process_monitor.get_active_window_info()
         if info and self._is_target(info[0]):
             app_name = info[0].replace('.exe', '').title()
             if self.current_app != app_name:
-                self.current_app = app_name; self.settings = self.settings_manager.load()
-                if self.settings.get('auto_save_enabled', True): self._update_status("Active", "ACTIVE", app_name)
-                else: self._update_status("Paused", "PAUSED", app_name)
-                self._log(f"Active application: {app_name}", LogLevel.ACTIVE); self._start_timers()
+                self.current_app = app_name
+                self.settings = self.settings_manager.load()
+                if self.settings.get('auto_save_enabled', True): 
+                    self._update_status("Active", "ACTIVE", app_name)
+                else: 
+                    self._update_status("Paused", "PAUSED", app_name)
+                self._log(f"Active application: {app_name}", LogLevel.ACTIVE)
+                self._start_timers()
         elif self.current_app:
-            self._log(f"Stopped monitoring {self.current_app}", LogLevel.INFO); self._update_status("Waiting", "WAITING")
-            self.current_app = None; self._stop_timers()
+            self._log(f"Stopped monitoring {self.current_app}", LogLevel.INFO)
+            self._update_status("Waiting", "WAITING")
+            self.current_app = None
+            self._stop_timers()
     def _start_timers(self):
         self._stop_timers()
-        if self.settings.get('auto_save_enabled', True): self._start_save_timer()
-        if self.settings.get('smart_backup_enabled', False): self._start_backup_timer()
-    def _stop_timers(self): self._stop_save_timer(); self._stop_backup_timer()
+        if self.settings.get('auto_save_enabled', True): 
+            self._start_save_timer()
+        if self.settings.get('smart_backup_enabled', False): 
+            self._start_backup_timer()
+    def _stop_timers(self): 
+        self._stop_save_timer()
+        self._stop_backup_timer()
     def _start_save_timer(self):
         self._stop_save_timer()
         def task():
             if self.current_app and self.settings.get('auto_save_enabled', True):
-                try: pyautogui.hotkey('ctrl', 's')
-                except Exception: self._log("Auto-Save command failed.", LogLevel.ERROR)
-                self._log(f"Auto-saved in {self.current_app}", LogLevel.SAVE); self._update_status("Saved!", "SAVED")
-                if self.current_app: self._start_save_timer()
-        self._save_timer = threading.Timer(self.settings['auto_save_interval'], task); self._save_timer.start()
+                try: 
+                    pyautogui.hotkey('ctrl', 's')
+                except Exception: 
+                    self._log("Auto-Save command failed.", LogLevel.ERROR)
+                self._log(f"Auto-saved in {self.current_app}", LogLevel.SAVE)
+                self._update_status("Saved!", "SAVED")
+                if self.current_app: 
+                    self._start_save_timer()
+        self._save_timer = threading.Timer(self.settings['auto_save_interval'], task)
+        self._save_timer.start()
     def _stop_save_timer(self):
-        if self._save_timer: self._save_timer.cancel(); self._save_timer = None
+        if self._save_timer: 
+            self._save_timer.cancel()
+            self._save_timer = None
     def _start_backup_timer(self):
         self._stop_backup_timer()
         def task():
             if self.current_app and self.settings.get('smart_backup_enabled', False):
                 self._create_backup()
-                if self.current_app: self._start_backup_timer()
-        self._backup_timer = threading.Timer(self.settings.get('smart_backup_interval', 60) * 60, task); self._backup_timer.start()
+                if self.current_app: 
+                    self._start_backup_timer()
+        self._backup_timer = threading.Timer(self.settings.get('smart_backup_interval', 60) * 60, task)
+        self._backup_timer.start()
     def _stop_backup_timer(self):
-        if self._backup_timer: self._backup_timer.cancel(); self._backup_timer = None
+        if self._backup_timer: 
+            self._backup_timer.cancel()
+            self._backup_timer = None
     def _create_backup(self):
         info = self.process_monitor.get_active_window_info()
-        if not info or not info[1] or '*' not in info[1]: return
+        if not info or not info[1] or '*' not in info[1]: 
+            return
         try:
-            title = info[1].split(' @')[0].split(' - ')[0].replace('*', '').strip(); original_path = Path(title)
-            if not original_path.is_file(): self._log("Backup failed: Cannot determine file path.", LogLevel.WARNING); return
-            backup_dir = original_path.parent / "Smart Backup"; backup_dir.mkdir(exist_ok=True)
-            timestamp = time.strftime("%Y%m%d-%H%M%S"); backup_filename = f"{original_path.stem}-{timestamp}{original_path.suffix}"
-            backup_path = backup_dir / backup_filename; pyautogui.hotkey('ctrl', 'shift', 's'); time.sleep(1)
-            pyautogui.write(str(backup_path), interval=0.01); pyautogui.press('enter')
-            self._log(f"Smart Backup created: {backup_filename}", LogLevel.SUCCESS); self._update_status("Backup!", "SAVED")
-        except Exception: self._log("Backup failed unexpectedly.", LogLevel.ERROR)
+            title = info[1].split(' @')[0].split(' - ')[0].replace('*', '').strip()
+            original_path = Path(title)
+            if not original_path.is_file(): 
+                self._log("Backup failed: Cannot determine file path.", LogLevel.WARNING)
+                return
+            backup_dir = original_path.parent / "Smart Backup"
+            backup_dir.mkdir(exist_ok=True)
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            backup_filename = f"{original_path.stem}-{timestamp}{original_path.suffix}"
+            backup_path = backup_dir / backup_filename
+            pyautogui.hotkey('ctrl', 'shift', 's')
+            time.sleep(1)
+            pyautogui.write(str(backup_path), interval=0.01)
+            pyautogui.press('enter')
+            self._log(f"Smart Backup created: {backup_filename}", LogLevel.SUCCESS)
+            self._update_status("Backup!", "SAVED")
+        except Exception: 
+            self._log("Backup failed unexpectedly.", LogLevel.ERROR)
     def update_settings(self, new_settings):
         self.settings.update(new_settings)
         if self.settings_manager.save():
-            self._log("Settings updated.", LogLevel.SUCCESS); self.startup_manager.set_startup(self.settings.get('start_with_windows', False))
-        else: self._log("Failed to save settings.", LogLevel.ERROR)
+            self._log("Settings updated.", LogLevel.SUCCESS)
+            self.startup_manager.set_startup(self.settings.get('start_with_windows', False))
+        else: 
+            self._log("Failed to save settings.", LogLevel.ERROR)
         if self.current_app:
-            self._stop_timers(); self._start_timers()
-            if self.settings.get('auto_save_enabled', True): self._update_status("Active", "ACTIVE", self.current_app)
-            else: self._update_status("Paused", "PAUSED", self.current_app)
+            self._stop_timers()
+            self._start_timers()
+            if self.settings.get('auto_save_enabled', True): 
+                self._update_status("Active", "ACTIVE", self.current_app)
+            else: 
+                self._update_status("Paused", "PAUSED", self.current_app)
     def add_monitored_app(self, app_path: str):
         app_name = Path(app_path).name.lower()
         if app_name and app_name not in self.settings['monitored_apps']:
             self.settings['monitored_apps'].append(app_name)
-            if self.settings_manager.save(): self._log(f"Added to watchlist: {app_name}", LogLevel.SUCCESS)
-            else: self._log("Failed to save new app.", LogLevel.ERROR)
-    def cleanup(self): self._stop_timers(); self.process_monitor.cleanup(); self._log("Personal Assistant has been shut down.", LogLevel.INFO)
+            if self.settings_manager.save(): 
+                self._log(f"Added to watchlist: {app_name}", LogLevel.SUCCESS)
+            else: 
+                self._log("Failed to save new app.", LogLevel.ERROR)
+    def cleanup(self): 
+        self._stop_timers()
+        self.process_monitor.cleanup()
+        self._log("Personal Assistant has been shut down.", LogLevel.INFO)
 
 class TrayManager:
     def __init__(self, show_cb: Callable, exit_cb: Callable):
@@ -484,12 +621,12 @@ class TrayManager:
             self._icon.stop()
             self._icon = None
 
-
 if __name__ == "__main__":
     if WINDOWS_API_AVAILABLE:
         try:
             ctypes.windll.shcore.SetProcessDpiAwareness(1)
-        except Exception: pass
+        except Exception: 
+            pass
     
     app = AppUI()
     app.mainloop()
